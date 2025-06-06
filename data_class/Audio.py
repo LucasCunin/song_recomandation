@@ -3,13 +3,67 @@ import numpy as np
 
 from pydantic import BaseModel
 
+class AudioDataRaw(BaseModel):
+    # General
+    path: str
+    label: str
+    zcr: float
+    rms: float
+    centroid: float
+    bandwidth: float
+    rolloff: float
+    tempo: float
+    spectral_contrast: float
+
+    # MFCC
+    mfcc_1_mean: float
+    mfcc_1_var: float
+    mfcc_2_mean: float
+    mfcc_2_var: float
+    mfcc_3_mean: float
+    mfcc_3_var: float
+    mfcc_4_mean: float
+    mfcc_4_var: float
+    mfcc_5_mean: float
+    mfcc_5_var: float
+    mfcc_6_mean: float
+    mfcc_6_var: float
+    mfcc_7_mean: float
+    mfcc_7_var: float
+    mfcc_8_mean: float
+    mfcc_8_var: float
+    mfcc_9_mean: float
+    mfcc_9_var: float
+    mfcc_10_mean: float
+    mfcc_10_var: float
+    mfcc_11_mean: float
+    mfcc_11_var: float
+    mfcc_12_mean: float
+    mfcc_12_var: float
+    mfcc_13_mean: float
+    mfcc_13_var: float
+    
+    # F0
+    f0_mean: float
+    f0_median: float
+    f0_std: float
 
 class Audio(BaseModel):
+    model_config = {
+        "arbitrary_types_allowed": True
+    }
+    
     path: str
     label: str
     sr: int = None
+    y: np.ndarray = None
     frame_length: int = 2048
     hop_length: int = 512
+
+    def model_post_init(self, __context):
+        """Charge le fichier audio après l'initialisation du modèle."""
+        if self.y is None:
+            self.y, self.sr = librosa.load(self.path)
 
 class AudioFeatureExtractor(BaseModel):
     audio: Audio
@@ -63,8 +117,9 @@ class AudioFeatureExtractor(BaseModel):
         contrast = librosa.feature.spectral_contrast(y=self.audio.y, sr=self.audio.sr, n_fft=self.audio.frame_length, hop_length=self.audio.hop_length)
         return np.mean(contrast)
 
-    def extract_features(self):
+    def extract_features(self) -> AudioDataRaw:
         features = {
+            'path': self.audio.path,
             'zcr': self.get_zcr(),
             'rms': self.get_rms(),
             'centroid': self.get_centroid(),
@@ -82,4 +137,4 @@ class AudioFeatureExtractor(BaseModel):
 
         features.update(self.get_f0_stats())
 
-        return features
+        return AudioDataRaw(**features)

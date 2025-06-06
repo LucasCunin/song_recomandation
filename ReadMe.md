@@ -1,70 +1,136 @@
-````
+# Système de Recommandation Audio
+
+Ce projet implémente un système de recommandation audio basé sur la similarité des caractéristiques audio extraites. Il permet de trouver des morceaux de musique similaires à un morceau de référence en utilisant des caractéristiques audio comme les MFCC, le tempo, et d'autres descripteurs audio.
+
+## Structure du Projet
+
+```
 .
-├── ReadMe.md
-├── data_class
-│   ├── Audio.py
-│   ├── AudioDataframe.py
-│   └── feature_extractor.py.py
-├── fleur.ipynb
-├── models
-│   ├── cluster.py
-│   └── recommender.py
-├── requirements.txt
-├── run.py
-└── tools
-    └── preprocessing.py
+├── data_class/
+│   ├── __init__.py
+│   ├── Audio.py              # Classes pour l'extraction des features audio
+│   └── AudioDataframe.py     # DataFrame personnalisé pour les features audio
+├── models/
+│   └── recommender.py        # Système de recommandation par similarité
+├── tools/
+│   └── preprocessing.py      # Outils de prétraitement (scaling, PCA)
+├── CHANGELOG.md             # Historique des changements et roadmap
+├── VERSION                  # Version actuelle du projet
+├── requirements.txt         # Dépendances du projet
+└── run_recommendation.py    # Script principal de recommandation
+```
 
-3 directories, 10 files
-````
+## Installation
 
+1. Cloner le repository
+2. Installer les dépendances :
 
-## Organisation des fichiers du projet
+```bash
+pip install -r requirements.txt
+```
 
-### 1. **`audio.py`**  
+## Utilisation
 
-* **Rôle** : Contient la classe principale `Audio`, qui prend en entrée un fichier audio ou un DataFrame audio.
-* **Fonctionnalité** : Gère la récupération des features (caractéristiques audio) pour chaque extrait audio provenant de la base de données.
-* **Explication** : Chaque objet `Audio` permet d’extraire des caractéristiques individuelles (zcr, rms, centroid, etc.) sur chaque extrait. 
+### Recommandation Audio
 
-### 2. **`feature_extractor.py`**
+Le système peut être utilisé en ligne de commande :
 
-* **Rôle** : Fichier contenant la fonction principale d’itération sur l’ensemble de la base audio.
-* **Fonctionnalité** : Cette fonction utilise la classe `Audio` pour extraire tous les features de chaque extrait présent dans la base, puis consolide les résultats.
-* **Explication** : C’est ce script qui orchestre le traitement de masse.
+```bash
+# Recommandation avec scaling des features
+python run_recommendation.py --data_path Data/genres_original --query_path "chemin/vers/votre/audio.wav" --n_recommendations 5 --scale
 
-### 3. **`distance.py`** (ou `cosine.py` ou `distance_metrics.py`)
+# Recommandation sans scaling
+python run_recommendation.py --data_path Data/genres_original --query_path "chemin/vers/votre/audio.wav" --n_recommendations 5
+```
 
-* **Rôle** : Définir les fonctions de distance ou de similarité (par exemple, la distance cosinus) pour comparer les features extraits.
-* **Fonctionnalité** : Fournit les méthodes pour calculer la distance ou la similarité entre deux ensembles de features audio. 
+Options disponibles :
 
-### 4. **`cluster.py`**
+- `--data_path` : Chemin vers le dossier contenant les fichiers audio (défaut: "Data/genres_original")
+- `--query_path` : Chemin vers le fichier audio de requête (obligatoire)
+- `--n_recommendations` : Nombre de recommandations à retourner (défaut: 5)
+- `--scale` : Activer le scaling des features (optionnel)
+- `--force_extract` : Forcer la réextraction des features même si le cache existe
 
-* **Rôle** : Fichier dédié à la mise en œuvre des algorithmes de clustering.
-* **Fonctionnalité** : Permet de grouper les extraits audio similaires à partir des features extraits, en utilisant les distances définies précédemment.
+### Exemple d'Utilisation
 
-### run.py 
+```bash
+# Exemple avec un fichier country
+python run_recommendation.py --data_path Data/genres_original --query_path Data/genres_original/country/country.00002.wav --n_recommendations 5 --scale
+```
 
-pooint d'entré de l'app pour faire soit la recomandation avec la cosigne soit avec le clustering
+Sortie attendue :
 
-### preprocessing.py
+```
+Chargement du cache : Data/genres_original/audio_features.csv
+Application du scaling aux features...
+Extraction des features du fichier de requête : Data/genres_original/country/country.00002.wav
 
-contient la ligc du preproc 
+Recommandations (chemins des fichiers) :
+Data/genres_original/country/country.00031.wav
+Data/genres_original/blues/blues.00000.wav
+Data/genres_original/pop/pop.00063.wav
+Data/genres_original/rock/rock.00000.wav
+Data/genres_original/reggae/reggae.00084.wav
+```
 
+## Fonctionnalités
 
-### **`data_class.py`** (optionnel, version V2)
+### Extraction de Features (`Audio.py`)
+- Extraction des caractéristiques audio :
+  - MFCC (13 coefficients avec moyenne et variance)
+  - Caractéristiques temporelles (ZCR, RMS)
+  - Caractéristiques spectrales (centroid, bandwidth, rolloff)
+  - Tempo
+  - F0 (fréquence fondamentale)
+  - Contraste spectral
 
-* **Rôle** : Fournir une structure de données normalisée pour manipuler les DataFrames audio nettoyés.
-* **Fonctionnalité** : Permet une manipulation plus robuste et typée des données audio, pour des traitements avancés ou des évolutions futures.
+### Gestion des Données (`AudioDataframe.py`)
+- DataFrame personnalisé héritant de pandas.DataFrame
+- Chargement automatique depuis un dossier de fichiers audio
+- Cache des features extraites dans un fichier CSV
+- Support pour le chargement depuis un DataFrame existant
 
+### Prétraitement (`preprocessing.py`)
+- Scaling des features avec StandardScaler
+- Réduction de dimensionnalité avec PCA (optionnel)
+- Préservation des métadonnées lors des transformations
 
+### Recommandation (`recommender.py`)
+- Système de recommandation basé sur la similarité
+- Support des features scaled et non-scaled
+- Retourne les chemins des fichiers les plus similaires
 
+## Workflow
 
-## Synthèse du workflow
+1. **Chargement/Extraction des Features** :
+   - Si un cache existe, les features sont chargées depuis le fichier CSV
+   - Sinon, les fichiers audio sont traités et les features sont extraites
+   - Les features sont stockées dans un AudioDataFrame
 
-* **`audio.py`** → Définit comment extraire les features d’un extrait audio.
-* **`feature_extractor.py`** → Orchestration : parcourt la base, applique la classe Audio à chaque entrée, et centralise les features.
-* **`distance.py` / `cosine.py`** → Fournit les métriques de comparaison.
-* **`cluster.py`** → Regroupe les extraits en clusters sur la base de ces métriques.
-* **`data_class.py`** → (facultatif, V2) Pour normaliser et fiabiliser la gestion des DataFrames.
+2. **Prétraitement** (si --scale est activé) :
+   - Les features numériques sont standardisées
+   - Les métadonnées (path, label) sont préservées
 
+3. **Recommandation** :
+   - Les features du fichier de requête sont extraites
+   - Le système calcule la similarité avec tous les morceaux
+   - Les n_recommendations morceaux les plus similaires sont retournés
 
+## Notes
+
+- Un avertissement peut apparaître concernant `librosa.beat.tempo` : c'est normal et n'affecte pas le fonctionnement
+- Le système utilise un cache pour éviter de réextraire les features à chaque fois
+- Le scaling des features peut améliorer la qualité des recommandations
+
+## Gestion des Versions
+
+Ce projet suit le [Semantic Versioning](https://semver.org/spec/v2.0.0.html) pour la numérotation des versions.
+
+- Le fichier `VERSION` contient la version actuelle du projet
+- Le fichier `CHANGELOG.md` documente :
+  - Les changements pour chaque version
+  - La roadmap des futures versions
+  - Les bugs connus
+  - Les suggestions d'amélioration
+
+Pour voir les changements prévus et l'historique des versions, consultez le [CHANGELOG.md](CHANGELOG.md).

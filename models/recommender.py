@@ -1,60 +1,56 @@
-from typing import List, Dict, Any
 import numpy as np
-from sklearn.preprocessing import StandardScaler
-from sklearn.metrics.pairwise import cosine_similarity
-from sklearn.decomposition import PCA
-import pandas as pd
+from typing import List
+from data_class import AudioDataFrame
 
-class CosineSimilarityRecommender:
-    def __init__(self, n_components: int = 10):
-        self.scaler = StandardScaler()
-        self.pca = PCA(n_components=n_components)
-        self.features_df = None
-        self.feature_columns = None
-        
-    def fit(self, features_df: pd.DataFrame, feature_columns: List[str]):
-        """Entraîne le modèle de recommandation."""
-        self.feature_columns = feature_columns
-        self.features_df = features_df.copy()
-        
-        # Normalisation des features
-        X = self.scaler.fit_transform(features_df[feature_columns])
-        
-        # Réduction de dimensionnalité
-        X_pca = self.pca.fit_transform(X)
-        
-        # Stockage des features transformées
-        self.features_df['features_pca'] = [x for x in X_pca]
-        
-    def recommend(self, audio_features: Dict[str, Any], n_recommendations: int = 5) -> pd.DataFrame:
-        """Recommande des morceaux similaires."""
-        # Préparation des features d'entrée
-        input_features = np.array([audio_features[col] for col in self.feature_columns]).reshape(1, -1)
-        
-        # Normalisation et transformation
-        input_features_scaled = self.scaler.transform(input_features)
-        input_features_pca = self.pca.transform(input_features_scaled)
-        
-        # Calcul des similarités
-        similarities = cosine_similarity(
-            input_features_pca,
-            np.vstack(self.features_df['features_pca'])
-        )[0]
-        
-        # Récupération des indices des morceaux les plus similaires
-        top_indices = np.argsort(similarities)[::-1][:n_recommendations]
-        
-        # Création du DataFrame de résultats
-        recommendations = self.features_df.iloc[top_indices].copy()
-        recommendations['similarity_score'] = similarities[top_indices]
-        
-        return recommendations[['label', 'similarity_score']]
-    
-    def get_feature_importance(self) -> pd.DataFrame:
-        """Retourne l'importance des features dans la PCA."""
-        importance = pd.DataFrame(
-            self.pca.components_.T,
-            columns=[f'PC{i+1}' for i in range(self.pca.n_components_)],
-            index=self.feature_columns
-        )
-        return importance 
+class AudioSimilarityRecommender:
+    def __init__(self, audio_df, feature_cols: List[str], path_col: str = "path"):
+        """
+        audio_df : AudioDataframe (héritant de pd.DataFrame)
+        feature_cols : liste des colonnes numériques/features à utiliser pour la similarité
+        path_col : colonne contenant le chemin du fichier audio
+        """
+        self.audio_df = audio_df
+        self.feature_cols = feature_cols
+        self.path_col = path_col
+        # On extrait déjà les features en numpy array pour l'efficacité
+        self.X = np.array(audio_df[feature_cols])
+        self.paths = audio_df[path_col].values
+
+    def recommend(self, query_df: AudioDataFrame, k: int = 5, metric: str = "euclidean") -> List[str]:
+        """
+        query_vector : 1D numpy array des features du fichier à comparer (après preprocessing !)
+        k : nombre de voisins à retourner
+        metric : "euclidean" ou "cosine"
+        Retourne : liste des chemins des k fichiers les plus similaires
+        """
+        # Calcul des distances
+        if metric == "euclidean":
+            dists = np.linalg.norm(self.X - query_df[self.feature_cols].values, axis=1)
+        elif metric == "cosine":
+            # 1 - cos sim pour retrouver la "distance"
+            X_norm = self.X / np.linalg.norm(self.X, axis=1, keepdims=True)
+            q_norm = query_df[self.feature_cols].values / np.linalg.norm(query_df[self.feature_cols].values)
+            dists = 1 - np.dot(X_norm, q_norm)
+        else:
+            raise ValueError("metric doit être 'euclidean' ou 'cosine'")
+
+        idx = np.argsort(dists)[:k]
+        return list(self.paths[idx])  # Ou si tu veux tout (label, path, distance) -> cf. plus bas
+
+    def recommend_full(self, query_vector: np.ndarray, k: int = 5, metric: str = "euclidean"):
+        """
+        Version qui retourne tout le DataFrame des k plus proches, AVEC la distance, trié.
+        """
+        if metric == "euclidean":
+            dists = np.linalg.norm(self.X - query_vector, axis=1)
+        elif metric == "cosine":
+            X_norm = self.X / np.linalg.norm(self.X, axis=1, keepdims=True)
+            q_norm = query_vector / np.linalg.norm(query_vector)
+            dists = 1 - np.dot(X_norm, q_norm)
+        else:
+            raise ValueError("metric doit être 'euclidean' ou 'cosine'")
+
+        idx = np.argsort(dists)[:k]
+        df_result = self.audio_df.iloc[idx].copy()
+        df_result["distance"] = dists[idx]
+        return df_result.sort_values("distance")
